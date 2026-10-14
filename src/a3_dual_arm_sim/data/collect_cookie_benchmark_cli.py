@@ -79,11 +79,15 @@ def main() -> int:
         source_column=source_column,
         randomization_settings=settings,
     )
+    # Record the same short instruction the summary and the evaluation CLIs declare;
+    # the per-column "task" variant stays opt-in for explicit experiments.
+    benchmark.prompt_style = "training"
     summary_path = root / "collection_summary.json"
     summary = {
         "schema_version": 2,
         "task": "cookie_transfer",
         "task_instruction": TASK,
+        "prompt_style": "training",
         "policy": "same_column",
         "source_action_mode": "cartesian_delta",
         "stored_action_mode": "joint_position",

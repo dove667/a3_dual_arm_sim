@@ -112,6 +112,18 @@ def audit_training_dataset(root: Path, *, repo_id: str) -> dict[str, Any]:
             transferred = [cookie for report in reports for cookie in report["cookies"]]
             if len(set(transferred)) != 20:
                 raise ValueError("2x10 grasp reports must describe twenty distinct cookies")
+    else:
+        # A model trained on per-column prompts evaluated with the short default
+        # (or vice versa) sees a language distribution it never learned; require the
+        # recorded instruction to equal the summary's declared one.
+        expected_instruction = collection_summary.get("task_instruction")
+        for episode in episodes:
+            if episode.get("task") != expected_instruction:
+                raise ValueError(
+                    "2x5 episode task instruction disagrees with the collection summary "
+                    f"({episode.get('task')!r} != {expected_instruction!r}); "
+                    "prompt-style mismatch between collection and evaluation"
+                )
 
     return {
         "root": str(root),
