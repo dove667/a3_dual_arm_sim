@@ -71,9 +71,23 @@ python examples/prepare_left_arm_dataset.py \
 
 训练器支持 8D 或 16D；无需为了训练强制转换。转换后训练的 `--root` 应指向转换结果；SmolVLA 完整检查点评测不再需要 `--dataset-root`，旧检查点补齐和 ACT 评测仍需匹配的数据。转换可能用符号链接引用原视频，勿删除原始数据。已有 8D 数据不要重复转换。
 
+### 2.3 多任务合并数据集（单模型双任务）
+
+两种布局的数据各自独立采集，训练器只接受单一 `--root`。要让**一个模型**同时服务 2×5 与 2×10，可把两份数据集合并为一份多任务数据集：
+
+```bash
+python examples/merge_cookie_datasets.py \
+  --roots datasets/cookie_2x5_v2 datasets/cookie_2x10_v2 \
+  --repo-ids local/cookie-2x5-v2 local/cookie-2x10-v2 \
+  --output datasets/cookie_multi_v1 --output-repo-id local/cookie-multi-v1
+```
+
+- 合并要求两组件来自同一录制器（features/fps/robot_type 一致，两个采集入口满足）；输出目录必须是新目录。合并集保留两类任务串，模型按提示词与场景区分任务；`collection_summary.json` 标记 `target_layout: "multi"` 并记录组件溯源，2×5 回合元数据与 2×10 计划/抓取报告各自的审计规则逐回合生效。
+- 训练该数据集时 tokenizer 自动使用 128 词元（含四抓长指令）；评测时 2×5 格用训练短指令、2×10 格用原生长指令，六格均为同一模型的权威任务。帧数按回合自然混合，长回合任务在采样中占比更高，属预期属性。
+
 2×10 使用相同审计入口，替换数据路径和 repo-id；其审计还检查二十块的四次抓取计划和释放记录。
 
-### 2.3 用已有模型或自定义策略录制调试轨迹
+### 2.4 用已有模型或自定义策略录制调试轨迹
 
 标准两个装盒采集 CLI 当前固定使用专家，**没有通用 `--policy` 选项**。任意插件可通过通用执行器录制单条轨迹，例如运行仓库提供的正弦动作示例：
 
@@ -137,7 +151,7 @@ a3-sim train-smolvla \
 
 这里数据路径沿用教程，正式训练应替换为足量且审计通过的数据。批大小按显存调整。`--dry-run` 可以输出训练命令，但仍会审计并生成适配文件；`--output` 指定的训练目录必须不存在。
 
-2×10 使用自己的数据目录和新输出目录；repo-id 可自动生成。训练器读取 `collection_summary.json` 的 `target_layout: 2x10` 后，为 SmolVLA 配置 128-词元文本长度。仅将旧十块模型放到 2×10 环境是迁移测试，不等于模型经过该任务训练；旧检查点的 tokenizer 设置不会由评测自动升级。
+2×10 使用自己的数据目录和新输出目录；repo-id 可自动生成。训练器读取 `collection_summary.json` 的 `target_layout: 2x10` 后，为 SmolVLA 配置 128-词元文本长度（`target_layout: multi` 的合并数据集同样使用 128）。仅将旧十块模型放到 2×10 环境是迁移测试，不等于模型经过该任务训练；旧检查点的 tokenizer 设置不会由评测自动升级。
 
 检查点通常位于 `model/checkpoints/<step>/pretrained_model`，保存配置、处理器和权重。精确评测应指定该目录，勿把基座误作微调模型；传实验运行目录时解析器选择最新有效步骤，并可能优先该步骤的 EMA 权重。继续训练需恢复训练状态，具体命令见 [恢复训练](smolvla.md#5-完整训练与恢复)，不要仅重复新训练命令或覆盖目录。
 

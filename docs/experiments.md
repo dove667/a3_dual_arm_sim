@@ -20,6 +20,7 @@
 | `preview_cameras.py` | `workflows.preview_cameras_cli` | 三相机预览 |
 | `collect_cookie_benchmark.py` | `data.collect_cookie_benchmark_cli` | 成功专家演示采集 |
 | `prepare_left_arm_dataset.py` | `data.prepare_left_arm_dataset_cli` | 16D→8D 数据转换 |
+| `merge_cookie_datasets.py` | `data.merge_cookie_datasets_cli` | 2×5+2×10 合并为单模型多任务数据集（`target_layout: multi`） |
 | `audit_smolvla_data.py` | `data.audit_smolvla_data_cli` | 数据及检查点统计审计 |
 | `smolvla_offline_error.py` | `workflows.smolvla_offline_error_cli` | 训练数据首动作误差，`--policy-type act` 支持 ACT |
 | `summarize_smolvla_trace.py` | `workflows.summarize_smolvla_trace_cli` | 汇总诊断动作轨迹 |
