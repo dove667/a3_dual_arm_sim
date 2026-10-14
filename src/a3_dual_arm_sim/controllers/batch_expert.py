@@ -64,11 +64,18 @@ class A3CookieBatchExpert(A3CookieTransferExpert):
                 mujoco.mju_mat2Quat(actual_q, work.site_xmat[self._l_site])
                 mujoco.mju_subQuat(error, target_q, actual_q)
                 distance = np.linalg.norm(work.site_xpos[self._l_site] - position)
-                if distance > 0.002 or np.linalg.norm(error) > 0.035:
+                # Multi-column experts relax these through instance attributes (the
+                # 2.5 mm / 0.035 rad vertical probe is slightly conservative for
+                # tilted grasps); the single-column expert keeps the legacy values.
+                position_tolerance = getattr(self, "_target_preflight_position_tol", 0.002)
+                rotation_tolerance = getattr(self, "_target_preflight_rotation_tol", 0.035)
+                if distance > position_tolerance or np.linalg.norm(error) > rotation_tolerance:
                     raise RuntimeError(
                         f"target column {column + 1} unreachable with vertical grasp: "
                         f"position error {distance * 1000:.2f} mm, "
-                        f"angle error {np.rad2deg(np.linalg.norm(error)):.2f} deg; "
+                        f"angle error {np.rad2deg(np.linalg.norm(error)):.2f} deg "
+                        f"(tolerances {position_tolerance * 1000:.1f} mm, "
+                        f"{np.rad2deg(rotation_tolerance):.1f} deg); "
                         "reposition the tabletop target box"
                     )
 
