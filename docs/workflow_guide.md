@@ -46,7 +46,7 @@ MUJOCO_GL=egl python examples/collect_cookie_2x10.py \
 
 `--episodes` 是目标成功保存条数，`--max-attempts` 包含失败；达到尝试上限不保证已得到目标条数。连续 25 次失败会停止。默认录制视频；`--no-videos` 改为 parquet 内嵌图像，通常更占空间。
 
-完整训练应增加采集量并检查任务覆盖，5 条只是流程检查。默认录制状态/动作为双臂 16D，保存的是动作前观测和环境实际应用的关节目标。采集产物包括：
+完整训练应增加采集量并检查任务覆盖，5 条只是流程检查。默认录制状态/动作为双臂 16D，保存的是动作前观测和环境实际应用的关节目标。2×5 采集现在记录与 `collection_summary.json` 及评测默认一致的短指令 `transfer 10 cookies into target box`（按列长指令仅供显式实验；`--prompt-style task` 训练的模型必须用同风格评测，否则语言分布错配会显著压低成绩）。采集产物包括：
 
 - `meta/`、`data/`、`videos/`：LeRobot v3 数据和统计。
 - `collection_summary.json`：配置、随机种子起点、动作约定等实验信息。
