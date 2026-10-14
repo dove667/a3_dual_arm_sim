@@ -152,6 +152,43 @@ class EpisodeExecution:
     def _completed_episode_metadata(self, runner_policy: Any, info: dict) -> dict:
         return {}
 
+    def _describe_incomplete_fill(self, info: dict) -> str:
+        """Explain why a non-expert, non-truncated episode missed the success contract.
+
+        The previous fallback reported "only N/M cookies in target box" even when the
+        real miss was a disturbed source bin (e.g. 69/70 cookies, target already full);
+        rebuild the reason from the env's info fields instead.
+        """
+        cookies_in_target = int(info.get("cookies_in_target", 0))
+        cookies_in_source = int(info.get("cookies_in_source", 0))
+        expected_source = (
+            len(self.config.cookie_transfer.cookie_source_positions_m) - self.required_cookies
+        )
+        parts = []
+        if cookies_in_target != self.required_cookies:
+            parts.append(f"{cookies_in_target}/{self.required_cookies} cookies in target box")
+        if cookies_in_source != expected_source:
+            parts.append(
+                f"{cookies_in_source}/{expected_source} cookies left in source "
+                "(collateral disturbance)"
+            )
+        if not parts:
+            reasons = []
+            occupancy = info.get("target_slot_occupancy")
+            if occupancy is not None and any(int(index) < 0 for index in occupancy):
+                reasons.append("target slots not one-to-one matched")
+            if info.get("target_touches_all_walls") is False:
+                reasons.append("target does not touch all walls")
+            counts = info.get("target_column_counts")
+            if counts is not None and tuple(counts) != (10, 10):
+                reasons.append(f"target column counts {tuple(counts)} != (10, 10)")
+            hold = int(info.get("success_hold_count", 0))
+            required_hold = int(info.get("required_success_hold_steps", 0))
+            if required_hold and hold < required_hold:
+                reasons.append(f"valid fill held {hold}/{required_hold} control steps")
+            parts.append("; ".join(reasons) if reasons else "success condition not met")
+        return "; ".join(parts)
+
     def run_episode(
         self,
         policy: Any,
@@ -298,6 +335,7 @@ class EpisodeExecution:
         )
 
         phase = getattr(runner_policy, "phase_name", "")
+
         failure_reason = None
         if not success:
             if terminated:
@@ -309,9 +347,7 @@ class EpisodeExecution:
             ):
                 failure_reason = getattr(runner_policy.expert, "failure_reason", "expert_failed")
             else:
-                failure_reason = (
-                    f"only {cookies_in_target}/{self.required_cookies} cookies in target box"
-                )
+                failure_reason = self._describe_incomplete_fill(info)
 
         if should_close_env:
             env.close()

@@ -1,0 +1,65 @@
+{
+  "revision": "29fe90e423259f388ebc061926c3ec860b9edc74",
+  "python": "3.13.12",
+  "mujoco": "3.6.0",
+  "config": "/home/eter/\u684c\u9762/workspace/a3_dual_arm_sim/configs/cookie_batch.yaml",
+  "physics_hz": 1000,
+  "control_hz": 20,
+  "camera_rendering_replay": false,
+  "expert_command_replay": [
+    {
+      "seed": 0,
+      "steps": 160,
+      "max_qpos_difference": 0.0,
+      "max_action_difference": 0.0,
+      "safety_stop": false,
+      "phase": "DESCEND_TO_PLACE"
+    },
+    {
+      "seed": 1,
+      "steps": 160,
+      "max_qpos_difference": 0.0,
+      "max_action_difference": 0.0,
+      "safety_stop": false,
+      "phase": "DESCEND_TO_PLACE"
+    },
+    {
+      "seed": 2,
+      "steps": 160,
+      "max_qpos_difference": 0.0,
+      "max_action_difference": 0.0,
+      "safety_stop": false,
+      "phase": "DESCEND_TO_PLACE"
+    }
+  ],
+  "observation_sync": {
+    "max_eef_stale_m": 0.0004262126738924153,
+    "max_front_pixel_difference": 97.0,
+    "max_front_mean_pixel_difference": 0.12459309895833333,
+    "max_tracking_error_rad": 0.043270696149638965,
+    "final_tracking_error_rad": 6.089489801297532e-09,
+    "sim_time": 1.4999999999999456,
+    "steps": 30,
+    "safety_stop": false
+  },
+  "constructor_mode_difference": {
+    "cartesian_request": [
+      1.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ],
+    "max_applied_action_difference_rad": 0.03338368286222293
+  },
+  "joint_replay_in_cartesian_env_error": "cartesian_delta action must have shape (14,), got (16,)"
+}
