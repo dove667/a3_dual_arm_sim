@@ -78,6 +78,44 @@ def test_training_dataset_audit_accepts_cookie_joint_actions(tmp_path: Path) -> 
         audit_training_dataset(root, repo_id="local/test")
 
 
+def test_training_dataset_audit_rejects_prompt_style_mismatch(tmp_path: Path) -> None:
+    root = _dataset(tmp_path / "cookie_prompt")
+    (root / "collection_summary.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "task": "cookie_transfer",
+                "stored_action_mode": "joint_position",
+                "task_instruction": "transfer 10 cookies into target box",
+            }
+        )
+        + "\n"
+    )
+    metadata = root / "a3_episode_metadata.jsonl"
+    metadata.write_text(
+        json.dumps(
+            {
+                "episode_index": 0,
+                "success": True,
+                "task": (
+                    "Transfer 10 cookies from source column 1 into the target box "
+                    "in two batches of five."
+                ),
+            }
+        )
+        + "\n"
+    )
+    with pytest.raises(ValueError, match="prompt-style mismatch"):
+        audit_training_dataset(root, repo_id="local/test")
+    metadata.write_text(
+        json.dumps(
+            {"episode_index": 0, "success": True, "task": "transfer 10 cookies into target box"}
+        )
+        + "\n"
+    )
+    audit_training_dataset(root, repo_id="local/test")
+
+
 def test_adapted_checkpoint_uses_three_cameras_and_16d_io(tmp_path: Path) -> None:
     base = tmp_path / "base"
     base.mkdir()
