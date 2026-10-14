@@ -11,6 +11,49 @@ CAMERA_KEYS = (
 )
 
 
+def _check_cookie_2x5_instruction(episode: dict, collection_summary: dict) -> None:
+    """Require the recorded instruction to equal the summary's declared one.
+
+    A model trained on per-column prompts evaluated with the short default (or
+    vice versa) sees a language distribution it never learned.
+    """
+    expected_instruction = collection_summary.get("task_instruction")
+    if episode.get("task") != expected_instruction:
+        raise ValueError(
+            "2x5 episode task instruction disagrees with the collection summary "
+            f"({episode.get('task')!r} != {expected_instruction!r}); "
+            "prompt-style mismatch between collection and evaluation"
+        )
+
+
+def _check_cookie_2x10_episode(episode: dict, collection_summary: dict) -> None:
+    from a3_dual_arm_sim.tasks.cookie_2x10_plan import Cookie2x10Plan
+
+    metadata = episode.get("randomization", {})
+    plan = Cookie2x10Plan.from_seed(collection_summary["first_grasp_mode"], episode["seed"])
+    if (
+        metadata.get("grasp_counts") != list(plan.batch_sizes)
+        or metadata.get("first_grasp_count") != plan.first_grasp
+        or metadata.get("cookies_in_target") != 20
+        or metadata.get("cookies_in_source") != 60
+        or metadata.get("target_column_counts") != [10, 10]
+        or episode.get("task") != plan.prompt(metadata.get("source_column"))
+    ):
+        raise ValueError("2x10 episode counts or task instruction disagree with its plan")
+    reports = metadata.get("grasp_reports", [])
+    if len(reports) != 4 or any(
+        report.get("planned_count") != planned
+        or report.get("lifted") != planned
+        or len(report.get("cookies", [])) != planned
+        or not report.get("released")
+        for report, planned in zip(reports, plan.batch_sizes, strict=True)
+    ):
+        raise ValueError("2x10 dataset requires four confirmed grasp reports, including zero skips")
+    transferred = [cookie for report in reports for cookie in report["cookies"]]
+    if len(set(transferred)) != 20:
+        raise ValueError("2x10 grasp reports must describe twenty distinct cookies")
+
+
 def audit_training_dataset(root: Path, *, repo_id: str) -> dict[str, Any]:
     """Fail fast on the parts of the LeRobot v3 contract used by A3 learned policies."""
     root = root.expanduser().resolve()
@@ -83,47 +126,22 @@ def audit_training_dataset(root: Path, *, repo_id: str) -> dict[str, Any]:
     if info.get("total_episodes") != len(episodes):
         raise ValueError("LeRobot and A3 episode metadata counts do not match")
 
-    if collection_summary.get("target_layout") == "2x10":
-        from a3_dual_arm_sim.tasks.cookie_2x10_plan import Cookie2x10Plan
-
+    target_layout = collection_summary.get("target_layout")
+    if target_layout == "2x10":
         for episode in episodes:
-            metadata = episode.get("randomization", {})
-            plan = Cookie2x10Plan.from_seed(collection_summary["first_grasp_mode"], episode["seed"])
-            if (
-                metadata.get("grasp_counts") != list(plan.batch_sizes)
-                or metadata.get("first_grasp_count") != plan.first_grasp
-                or metadata.get("cookies_in_target") != 20
-                or metadata.get("cookies_in_source") != 60
-                or metadata.get("target_column_counts") != [10, 10]
-                or episode.get("task") != plan.prompt(metadata.get("source_column"))
-            ):
-                raise ValueError("2x10 episode counts or task instruction disagree with its plan")
-            reports = metadata.get("grasp_reports", [])
-            if len(reports) != 4 or any(
-                report.get("planned_count") != planned
-                or report.get("lifted") != planned
-                or len(report.get("cookies", [])) != planned
-                or not report.get("released")
-                for report, planned in zip(reports, plan.batch_sizes, strict=True)
-            ):
-                raise ValueError(
-                    "2x10 dataset requires four confirmed grasp reports, including zero skips"
-                )
-            transferred = [cookie for report in reports for cookie in report["cookies"]]
-            if len(set(transferred)) != 20:
-                raise ValueError("2x10 grasp reports must describe twenty distinct cookies")
+            _check_cookie_2x10_episode(episode, collection_summary)
+    elif target_layout == "multi":
+        # Merged two-component datasets carry both episode families; dispatch each
+        # episode to its component's rules using the grasp reports the 2x10
+        # recorder always writes.
+        for episode in episodes:
+            if episode.get("randomization", {}).get("grasp_reports"):
+                _check_cookie_2x10_episode(episode, collection_summary)
+            else:
+                _check_cookie_2x5_instruction(episode, collection_summary)
     else:
-        # A model trained on per-column prompts evaluated with the short default
-        # (or vice versa) sees a language distribution it never learned; require the
-        # recorded instruction to equal the summary's declared one.
-        expected_instruction = collection_summary.get("task_instruction")
         for episode in episodes:
-            if episode.get("task") != expected_instruction:
-                raise ValueError(
-                    "2x5 episode task instruction disagrees with the collection summary "
-                    f"({episode.get('task')!r} != {expected_instruction!r}); "
-                    "prompt-style mismatch between collection and evaluation"
-                )
+            _check_cookie_2x5_instruction(episode, collection_summary)
 
     return {
         "root": str(root),

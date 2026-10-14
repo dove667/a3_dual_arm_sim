@@ -50,6 +50,15 @@ def _local_hub_snapshot(repo_id: str) -> Path | None:
     return snapshot if (snapshot / "config.json").is_file() else None
 
 
+def tokenizer_max_length_for(collection: dict) -> int | None:
+    """128 tokens whenever the data carries the four-grasp plan prompt.
+
+    The plan prompt exceeds the base checkpoint's 48-token limit and appears in
+    2x10 datasets as well as in merged multi-task datasets.
+    """
+    return 128 if collection.get("target_layout") in ("2x10", "multi") else None
+
+
 def prepare_a3_smolvla_source(
     base_model: Path,
     runtime_dir: Path,
@@ -244,7 +253,7 @@ def train_smolvla(
         decay_steps=steps,
         action_dim=audit["action_dim"],
         # The four-grasp prompt exceeds the base checkpoint's 48-token limit.
-        tokenizer_max_length=128 if collection.get("target_layout") == "2x10" else None,
+        tokenizer_max_length=tokenizer_max_length_for(collection),
     )
     command = build_train_command(
         dataset_root=dataset_root,
