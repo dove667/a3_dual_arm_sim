@@ -163,6 +163,22 @@ def prepare_a3_smolvla_source(
     return runtime_dir
 
 
+def _eval_disable_flag() -> str:
+    """Pick the eval-disable flag of the installed LeRobot trainer.
+
+    The pinned public 0.5.1 accepts ``--eval_freq``; the development 0.5.2
+    renamed it to ``--env_eval_freq`` (see docs/limitations.md).
+    """
+    from lerobot.configs.train import TrainPipelineConfig
+
+    fields = TrainPipelineConfig.__dataclass_fields__
+    if "eval_freq" in fields:
+        return "--eval_freq=0"
+    if "env_eval_freq" in fields:
+        return "--env_eval_freq=0"
+    raise ValueError("installed LeRobot exposes neither eval_freq nor env_eval_freq")
+
+
 def build_train_command(
     *,
     dataset_root: Path,
@@ -193,7 +209,7 @@ def build_train_command(
         f"--num_workers={num_workers}",
         f"--batch_size={batch_size}",
         f"--steps={steps}",
-        "--eval_freq=0",
+        _eval_disable_flag(),
         f"--log_freq={min(20, steps)}",
         "--save_checkpoint=true",
         f"--save_freq={save_freq}",

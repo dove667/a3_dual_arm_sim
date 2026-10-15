@@ -7,10 +7,22 @@ import pytest
 
 from a3_dual_arm_sim.learning.training import (
     CAMERA_KEYS,
+    _eval_disable_flag,
     audit_training_dataset,
     build_train_command,
     prepare_a3_smolvla_source,
 )
+
+
+def test_eval_disable_flag_matches_installed_lerobot() -> None:
+    # The pinned public 0.5.1 uses --eval_freq; the development 0.5.2 renamed it
+    # to --env_eval_freq. The chosen flag must exist in the installed config.
+    from lerobot.configs.train import TrainPipelineConfig
+
+    flag = _eval_disable_flag()
+    assert flag in ("--eval_freq=0", "--env_eval_freq=0")
+    name = flag.lstrip("-").split("=", 1)[0]
+    assert name in TrainPipelineConfig.__dataclass_fields__
 
 
 def _dataset(root: Path, *, success: bool = True) -> Path:
