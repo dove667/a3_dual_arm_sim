@@ -34,9 +34,12 @@ def sdpa_attention_forward(
     num_key_value_heads = self.num_key_value_heads
     num_key_value_groups = num_heads // num_key_value_heads
 
-    query = query_states.transpose(1, 2).to(torch.float32)  # (B, H, T, D)
-    key = key_states.transpose(1, 2).to(torch.float32)  # (B, KV, S, D)
-    value = value_states.transpose(1, 2).to(torch.float32)
+    # Keep the incoming dtype: the eager path's float32 upcast would force the
+    # slow fp32 math kernels and double activation memory; under AMP autocast
+    # this keeps the fused bf16 kernels active.
+    query = query_states.transpose(1, 2)  # (B, H, T, D)
+    key = key_states.transpose(1, 2)  # (B, KV, S, D)
+    value = value_states.transpose(1, 2)
     if num_key_value_groups != 1:
         key = key[:, :, None].expand(-1, -1, num_key_value_groups, -1, -1).reshape(
             batch_size, num_heads, -1, head_dim
