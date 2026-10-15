@@ -198,7 +198,13 @@ def build_train_command(
     cmd = [
         sys.executable,
         "-m",
-        "lerobot.scripts.lerobot_train",
+        (
+            # Route through the SDPA shim when enabled so memory-limited GPUs can
+            # train without the development checkout's eager attention blow-up.
+            "a3_dual_arm_sim.learning.smolvla_attention"
+            if os.environ.get("A3_SMOLVLA_SDPA") == "1"
+            else "lerobot.scripts.lerobot_train"
+        ),
         f"--dataset.repo_id={repo_id}",
         f"--dataset.root={dataset_root.expanduser().resolve()}",
         "--dataset.video_backend=pyav",
