@@ -162,7 +162,7 @@ def test_train_command_is_local_reproducible_smoke(tmp_path: Path) -> None:
     joined = " ".join(command)
     assert "--steps=1" in joined
     assert "--dataset.video_backend=pyav" in joined
-    assert "--eval_freq=0" in joined
+    assert _eval_disable_flag() in joined
     assert "--wandb.enable=false" in joined
     assert "--save_freq=2000" in command
     assert not any(flag.startswith("--ema.") for flag in command)
