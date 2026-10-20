@@ -4,9 +4,10 @@ The machine's LeRobot development checkout hardcodes the eager attention
 implementation in ``smolvlm_with_expert``, which materializes the full attention
 matrix; SmolVLA then exhausts a 16 GB card at batch 32 (the September checkout
 used a fused path and trained batch 64 in ~8 GB). Installing this shim swaps the
-interface to ``torch.nn.functional.scaled_dot_product_attention`` while keeping
-the eager math: float32 scores, additive mask semantics, GQA head broadcast,
-output cast back to the value dtype.
+interface to ``torch.nn.functional.scaled_dot_product_attention`` with boolean
+allowed-position masks, GQA head broadcast, and output cast to the value dtype.
+AMP uses fused low-precision kernels; it is numerically, not bitwise, equivalent
+to eager. Mixed-dtype calls outside autocast promote Q/K/V to a common dtype.
 
 Enabled only through ``A3_SMOLVLA_SDPA=1`` so that environments running the
 pinned public LeRobot 0.5.1 keep their upstream attention implementation. This
@@ -40,6 +41,9 @@ def sdpa_attention_forward(
     query = query_states.transpose(1, 2)  # (B, H, T, D)
     key = key_states.transpose(1, 2)  # (B, KV, S, D)
     value = value_states.transpose(1, 2)
+    if not (query.dtype == key.dtype == value.dtype):
+        dtype = torch.promote_types(torch.promote_types(query.dtype, key.dtype), value.dtype)
+        query, key, value = query.to(dtype), key.to(dtype), value.to(dtype)
     if num_key_value_groups != 1:
         key = key[:, :, None].expand(-1, -1, num_key_value_groups, -1, -1).reshape(
             batch_size, num_heads, -1, head_dim
@@ -75,6 +79,12 @@ def sdpa_attention_forward(
         scale=head_dim**-0.5,
         is_causal=False,
     )
+    if mask is not None:
+        # Eager fills fully masked rows with the finite minimum and therefore
+        # produces a uniform average. SDPA returns zero; preserve eager's behavior
+        # for padded queries as well, including the value gradient.
+        fully_masked = ~mask.any(dim=-1, keepdim=True)
+        att_output = torch.where(fully_masked, value.mean(dim=-2, keepdim=True), att_output)
     att_output = att_output.to(value_states.dtype)
     att_output = att_output.transpose(1, 2)
     # -1 because the sequence length can change between experts.

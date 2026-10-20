@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 
 import pytest
+import pyarrow as pa
+import pyarrow.parquet as pq
 
 from a3_dual_arm_sim.learning.training import (
     CAMERA_KEYS,
@@ -44,8 +46,14 @@ def _dataset(root: Path, *, success: bool = True) -> Path:
         )
     )
     (root / "a3_episode_metadata.jsonl").write_text(
-        json.dumps({"episode_index": 0, "success": success}) + "\n"
+        json.dumps({"episode_index": 0, "success": success, "frames": 12}) + "\n"
     )
+    episode_path = root / "meta" / "episodes" / "chunk-000" / "file-000.parquet"
+    episode_path.parent.mkdir(parents=True)
+    pq.write_table(pa.table({"episode_index": [0], "length": [12]}), episode_path)
+    data_path = root / "data" / "chunk-000" / "file-000.parquet"
+    data_path.parent.mkdir(parents=True)
+    pq.write_table(pa.table({"episode_index": [0] * 12}), data_path)
     (root / "collection_summary.json").write_text(
         json.dumps({"schema_version": 2, "task": "a3_grasp"}) + "\n"
     )
@@ -109,6 +117,7 @@ def test_training_dataset_audit_rejects_prompt_style_mismatch(tmp_path: Path) ->
             {
                 "episode_index": 0,
                 "success": True,
+                "frames": 12,
                 "task": (
                     "Transfer 10 cookies from source column 1 into the target box "
                     "in two batches of five."
@@ -121,7 +130,8 @@ def test_training_dataset_audit_rejects_prompt_style_mismatch(tmp_path: Path) ->
         audit_training_dataset(root, repo_id="local/test")
     metadata.write_text(
         json.dumps(
-            {"episode_index": 0, "success": True, "task": "transfer 10 cookies into target box"}
+            {"episode_index": 0, "success": True, "frames": 12,
+             "task": "transfer 10 cookies into target box"}
         )
         + "\n"
     )

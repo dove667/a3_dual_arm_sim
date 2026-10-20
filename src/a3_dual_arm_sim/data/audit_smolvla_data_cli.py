@@ -72,7 +72,7 @@ def main():
         for row in table.to_pylist():
             frames += 1
             for key in ("action", "observation.state"):
-                if len(row[key]) != contract["action_dim"] or not np.isfinite(row[key]).all():
+                if len(row[key]) != contract["state_dim" if key == "observation.state" else "action_dim"] or not np.isfinite(row[key]).all():
                     raise ValueError(f"Invalid {key} in episode {row['episode_index']}")
             ep = row["episode_index"]
             if ep not in samples:
@@ -109,7 +109,7 @@ def main():
     for key in ("action", "observation.state"):
         for stat in ("mean", "std"):
             values = np.asarray(stats[key][stat])
-            if values.shape != (contract["action_dim"],) or not np.isfinite(values).all():
+            if values.shape != (contract["state_dim" if key == "observation.state" else "action_dim"],) or not np.isfinite(values).all():
                 raise ValueError(f"Invalid statistics: {key}.{stat}")
     if frames != contract["frames"] or len(samples) != contract["episodes"]:
         raise ValueError("Parquet frame/episode counts differ from metadata")

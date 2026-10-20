@@ -1,0 +1,149 @@
+{
+  "root": "/home/eter/\u684c\u9762/workspace/a3_dual_arm_sim/src/a3_dual_arm_sim/audits/second_round_finetune_v1/dataset_fixed_normalization",
+  "repo_id": "local/cookie-second-round-medium100-left11",
+  "episodes": 100,
+  "frames": 24871,
+  "tasks": 1,
+  "camera_keys": [
+    "observation.images.front",
+    "observation.images.left_wrist",
+    "observation.images.right_wrist"
+  ],
+  "state_dim": 11,
+  "action_dim": 8,
+  "device": "cuda",
+  "output_dir": "/home/eter/\u684c\u9762/workspace/a3_dual_arm_sim/src/a3_dual_arm_sim/audits/second_round_finetune_v1/model",
+  "command": [
+    "/home/eter/miniforge3/bin/python",
+    "-m",
+    "a3_dual_arm_sim.learning.smolvla_attention",
+    "--dataset.repo_id=local/cookie-second-round-medium100-left11",
+    "--dataset.root=/home/eter/\u684c\u9762/workspace/a3_dual_arm_sim/src/a3_dual_arm_sim/audits/second_round_finetune_v1/dataset_fixed_normalization",
+    "--dataset.video_backend=pyav",
+    "--policy.path=/home/eter/\u684c\u9762/workspace/a3_dual_arm_sim/src/a3_dual_arm_sim/audits/second_round_finetune_v1/.model_a3_smolvla_source",
+    "--output_dir=/home/eter/\u684c\u9762/workspace/a3_dual_arm_sim/src/a3_dual_arm_sim/audits/second_round_finetune_v1/model",
+    "--job_name=a3_grasp_smolvla",
+    "--seed=1000",
+    "--num_workers=2",
+    "--batch_size=16",
+    "--steps=3110",
+    "--env_eval_freq=0",
+    "--log_freq=20",
+    "--save_checkpoint=true",
+    "--save_freq=1555",
+    "--wandb.enable=false"
+  ],
+  "policy_config": {
+    "type": "smolvla",
+    "n_obs_steps": 1,
+    "input_features": {
+      "observation.images.front": {
+        "type": "VISUAL",
+        "shape": [
+          3,
+          256,
+          256
+        ]
+      },
+      "observation.images.left_wrist": {
+        "type": "VISUAL",
+        "shape": [
+          3,
+          256,
+          256
+        ]
+      },
+      "observation.images.right_wrist": {
+        "type": "VISUAL",
+        "shape": [
+          3,
+          256,
+          256
+        ]
+      },
+      "observation.state": {
+        "type": "STATE",
+        "shape": [
+          11
+        ]
+      }
+    },
+    "output_features": {
+      "action": {
+        "type": "ACTION",
+        "shape": [
+          8
+        ]
+      }
+    },
+    "device": "cuda",
+    "dtype": null,
+    "use_amp": true,
+    "use_peft": false,
+    "push_to_hub": false,
+    "repo_id": null,
+    "private": null,
+    "tags": null,
+    "license": null,
+    "pretrained_path": "/home/eter/\u684c\u9762/workspace/a3_dual_arm_sim/outputs/cookie_2x5_frontfirst_basic_medium_left11_20k_b32_v1/.model_a3_smolvla_source",
+    "pretrained_revision": null,
+    "chunk_size": 50,
+    "n_action_steps": 50,
+    "normalization_mapping": {
+      "VISUAL": "IDENTITY",
+      "STATE": "MEAN_STD",
+      "ACTION": "MEAN_STD"
+    },
+    "max_state_dim": 32,
+    "max_action_dim": 32,
+    "resize_imgs_with_padding": [
+      512,
+      512
+    ],
+    "empty_cameras": 0,
+    "adapt_to_pi_aloha": false,
+    "use_delta_joint_actions_aloha": false,
+    "tokenizer_max_length": 48,
+    "num_steps": 25,
+    "use_cache": true,
+    "freeze_vision_encoder": true,
+    "train_expert_only": true,
+    "train_state_proj": true,
+    "optimizer_lr": 5e-06,
+    "optimizer_betas": [
+      0.9,
+      0.95
+    ],
+    "optimizer_eps": 1e-08,
+    "optimizer_weight_decay": 1e-10,
+    "optimizer_grad_clip_norm": 10.0,
+    "scheduler_warmup_steps": 100,
+    "scheduler_decay_steps": 3110,
+    "scheduler_decay_lr": 1e-06,
+    "vlm_model_name": "/home/eter/.cache/huggingface/hub/models--HuggingFaceTB--SmolVLM2-500M-Video-Instruct/snapshots/7b375e1b73b11138ff12fe22c8f2822d8fe03467",
+    "load_vlm_weights": false,
+    "add_image_special_tokens": false,
+    "attention_mode": "cross_attn",
+    "prefix_length": 0,
+    "pad_language_to": "max_length",
+    "num_expert_layers": 0,
+    "num_vlm_layers": 16,
+    "self_attn_every_n_layers": 2,
+    "expert_width_multiplier": 0.75,
+    "expert_variant": "base",
+    "residual_width_multiplier": 0.25,
+    "residual_kernel_size": 3,
+    "residual_scale": 1.0,
+    "boundary_width_multiplier": 0.25,
+    "boundary_scale": 1.0,
+    "boundary_loss_weight": 0.1,
+    "transition_loss_boost": 1.0,
+    "transition_window": 3,
+    "min_period": 0.004,
+    "max_period": 4.0,
+    "rtc_config": null,
+    "compile_model": false,
+    "compile_mode": "max-autotune"
+  },
+  "checkpoint": "/home/eter/\u684c\u9762/workspace/a3_dual_arm_sim/src/a3_dual_arm_sim/audits/second_round_finetune_v1/model/checkpoints/003110/pretrained_model"
+}

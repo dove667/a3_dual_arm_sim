@@ -1,0 +1,28 @@
+{
+  "base": "/home/eter/\u684c\u9762/workspace/a3_dual_arm_sim/outputs/cookie_2x5_frontfirst_basic_medium_left11_40k_resume_v1/model/checkpoints/022000/pretrained_model",
+  "source_dataset": "/home/eter/\u684c\u9762/workspace/a3_dual_arm_sim/datasets/cookie_second_round_medium100_v2/training_left11",
+  "dataset_audit": {
+    "root": "/home/eter/\u684c\u9762/workspace/a3_dual_arm_sim/datasets/cookie_second_round_medium100_v2/training_left11",
+    "repo_id": "local/cookie-second-round-medium100-left11",
+    "episodes": 100,
+    "frames": 24871,
+    "tasks": 1,
+    "camera_keys": [
+      "observation.images.front",
+      "observation.images.left_wrist",
+      "observation.images.right_wrist"
+    ],
+    "state_dim": 11,
+    "action_dim": 8
+  },
+  "batch_size": 16,
+  "steps_per_frame_epoch": 1555,
+  "steps": 3110,
+  "epochs": 2,
+  "lr": 5e-06,
+  "decay_lr": 1e-06,
+  "warmup_steps": 100,
+  "normalization_stats_source": "/home/eter/\u684c\u9762/workspace/a3_dual_arm_sim/datasets/cookie_2x5_frontfirst_basic_medium_left11_v1/meta/stats.json",
+  "resume_optimizer": false,
+  "scope": "second_round_suffix_only"
+}

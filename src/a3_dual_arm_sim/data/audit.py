@@ -90,9 +90,15 @@ def audit_training_dataset(root: Path, *, repo_id: str) -> dict[str, Any]:
     if arm_mode == "left" and collection_summary.get("task") != "cookie_transfer":
         raise ValueError("Left-only training is restricted to cookie_transfer")
     action_dim = 8 if arm_mode == "left" else 16
+    state_contract = collection_summary.get("training_state_contract")
+    if state_contract not in (None, "left_joint7_gripper1_eef_world_xyz_m3"):
+        raise ValueError(f"Unsupported training_state_contract: {state_contract}")
+    if state_contract and arm_mode != "left":
+        raise ValueError("Left EEF position requires left-arm training mode")
+    state_dim = 11 if state_contract else action_dim
     expected_shapes = {
         **{key: [256, 256, 3] for key in CAMERA_KEYS},
-        "observation.state": [action_dim],
+        "observation.state": [state_dim],
         "action": [action_dim],
     }
     for key, shape in expected_shapes.items():
@@ -126,19 +132,56 @@ def audit_training_dataset(root: Path, *, repo_id: str) -> dict[str, Any]:
     if info.get("total_episodes") != len(episodes):
         raise ValueError("LeRobot and A3 episode metadata counts do not match")
 
+    # Sidecar rows can survive a writer interruption even when their buffered
+    # Parquet episodes do not. Check the persisted training data, not just the
+    # recorder's success ledger.
+    import pyarrow.parquet as pq
+
+    episode_lengths = {}
+    for path in sorted((root / "meta/episodes").rglob("*.parquet")):
+        for row in pq.read_table(path, columns=["episode_index", "length"]).to_pylist():
+            index = row["episode_index"]
+            if index in episode_lengths:
+                raise ValueError(f"Duplicate persisted episode {index}")
+            episode_lengths[index] = row["length"]
+    expected_episodes = set(range(len(episodes)))
+    if set(episode_lengths) != expected_episodes:
+        raise ValueError(
+            f"Persisted episode metadata differs from A3 ledger: "
+            f"missing={sorted(expected_episodes - set(episode_lengths))}"
+        )
+    data_lengths = {index: 0 for index in expected_episodes}
+    frame_count = 0
+    for path in sorted((root / "data").rglob("*.parquet")):
+        for index in pq.read_table(path, columns=["episode_index"])["episode_index"].to_pylist():
+            if index not in data_lengths:
+                raise ValueError(f"Unexpected persisted episode {index}")
+            data_lengths[index] += 1
+            frame_count += 1
+    if frame_count != info.get("total_frames") or any(
+        data_lengths[index] != episode_lengths[index] or data_lengths[index] != episodes[index]["frames"]
+        for index in expected_episodes
+    ):
+        raise ValueError("Persisted Parquet frame counts differ from episode metadata")
+
     target_layout = collection_summary.get("target_layout")
     if target_layout == "2x10":
         for episode in episodes:
             _check_cookie_2x10_episode(episode, collection_summary)
     elif target_layout == "multi":
-        # Merged two-component datasets carry both episode families; dispatch each
-        # episode to its component's rules using the grasp reports the 2x10
-        # recorder always writes.
+        components = {
+            component["repo_id"]: component["target_layout"]
+            for component in collection_summary.get("components", [])
+        }
         for episode in episodes:
-            if episode.get("randomization", {}).get("grasp_reports"):
+            source = episode.get("source_dataset")
+            layout = components.get(source)
+            if layout == "2x10":
                 _check_cookie_2x10_episode(episode, collection_summary)
-            else:
+            elif layout == "2x5":
                 _check_cookie_2x5_instruction(episode, collection_summary)
+            else:
+                raise ValueError(f"Unknown merged episode source {source!r}")
     else:
         for episode in episodes:
             _check_cookie_2x5_instruction(episode, collection_summary)
@@ -150,6 +193,6 @@ def audit_training_dataset(root: Path, *, repo_id: str) -> dict[str, Any]:
         "frames": int(info["total_frames"]),
         "tasks": int(info["total_tasks"]),
         "camera_keys": list(CAMERA_KEYS),
-        "state_dim": action_dim,
+        "state_dim": state_dim,
         "action_dim": action_dim,
     }

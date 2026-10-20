@@ -277,8 +277,9 @@ class A3CookieBatchExpert(A3CookieTransferExpert):
     def _place_pose(self, clearance=0.0, column_index=None):
         rotation = self.data.xmat[self._tb_id].reshape(3, 3)
         slots = np.asarray(self.env.TARGET_SLOTS_LOCAL)
+        from .placement_order import ordered_column
         column_x = np.unique(slots[:, 0])[
-            self.batch_index if column_index is None else column_index
+            ordered_column(self.env, self.batch_index) if column_index is None else column_index
         ]
         center = np.array(
             [
