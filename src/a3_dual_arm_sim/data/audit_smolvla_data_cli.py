@@ -24,7 +24,7 @@ def sample_video_frames(root: Path, repo_id: str, episodes: int) -> dict[int, di
     """
     from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
-    dataset = LeRobotDataset(repo_id=repo_id, root=root, return_uint8=True)
+    dataset = LeRobotDataset(repo_id=repo_id, root=root)
     images: dict[int, dict] = {}
     for episode in range(episodes):
         start = int(dataset.meta.episodes["dataset_from_index"][episode])
