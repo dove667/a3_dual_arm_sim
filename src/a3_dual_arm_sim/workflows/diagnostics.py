@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 import json
+import shutil
+import subprocess
+import tempfile
+import warnings
 from pathlib import Path
 
 import cv2
@@ -17,6 +21,40 @@ def json_value(value):
     raise TypeError(type(value).__name__)
 
 
+def _encode_preview_video(path: Path, ffmpeg: str) -> None:
+    """Replace a finished diagnostic video only after H.264 encoding succeeds."""
+    with tempfile.TemporaryDirectory(prefix=".video-preview-", dir=path.parent) as directory:
+        encoded = Path(directory) / path.name
+        result = subprocess.run(
+            [
+                ffmpeg,
+                "-nostdin",
+                "-v",
+                "error",
+                "-i",
+                str(path),
+                "-c:v",
+                "libx264",
+                "-crf",
+                "18",
+                "-preset",
+                "fast",
+                "-pix_fmt",
+                "yuv420p",
+                "-movflags",
+                "+faststart",
+                "-an",
+                str(encoded),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr.strip() or "FFmpeg encoding failed")
+        encoded.replace(path)
+
+
 class EpisodeDiagnostic:
     def __init__(self, root: Path, fps: int = 20):
         root.mkdir(parents=True, exist_ok=False)
@@ -29,7 +67,9 @@ class EpisodeDiagnostic:
         self.max_hold_count = 0
         self.final_conditions = None
 
-    def add_frame(self, observation, action, info, *, raw_action=None, phase="", env=None, policy_seconds=None):
+    def add_frame(
+        self, observation, action, info, *, raw_action=None, phase="", env=None, policy_seconds=None
+    ):
         for key, frame in observation.items():
             if not key.startswith("observation.images."):
                 continue
@@ -74,19 +114,30 @@ class EpisodeDiagnostic:
         record["policy_call_seconds"] = policy_seconds
         if env is not None:
             import mujoco
+
             record["after"].update(
                 cookie_quaternions=env.data.xquat[list(env._cookie_bodies)].copy(),
                 eef_positions=env.data.site_xpos[list(env._eef_sites)].copy(),
                 eef_rotation_matrices=env.data.site_xmat[list(env._eef_sites)].copy(),
                 target_position=env.data.xpos[env._target_bin_body].copy(),
                 target_quaternion=env.data.xquat[env._target_bin_body].copy(),
-                contacts=[{
-                    "geom1": mujoco.mj_id2name(env.model, mujoco.mjtObj.mjOBJ_GEOM, int(c.geom1)),
-                    "geom2": mujoco.mj_id2name(env.model, mujoco.mjtObj.mjOBJ_GEOM, int(c.geom2)),
-                    "position": c.pos.copy(), "distance": float(c.dist),
-                } for c in env.data.contact[:env.data.ncon]
-                   if "cookie" in (mujoco.mj_id2name(env.model, mujoco.mjtObj.mjOBJ_GEOM, int(c.geom1)) or "")
-                   or "cookie" in (mujoco.mj_id2name(env.model, mujoco.mjtObj.mjOBJ_GEOM, int(c.geom2)) or "")],
+                contacts=[
+                    {
+                        "geom1": mujoco.mj_id2name(
+                            env.model, mujoco.mjtObj.mjOBJ_GEOM, int(c.geom1)
+                        ),
+                        "geom2": mujoco.mj_id2name(
+                            env.model, mujoco.mjtObj.mjOBJ_GEOM, int(c.geom2)
+                        ),
+                        "position": c.pos.copy(),
+                        "distance": float(c.dist),
+                    }
+                    for c in env.data.contact[: env.data.ncon]
+                    if "cookie"
+                    in (mujoco.mj_id2name(env.model, mujoco.mjtObj.mjOBJ_GEOM, int(c.geom1)) or "")
+                    or "cookie"
+                    in (mujoco.mj_id2name(env.model, mujoco.mjtObj.mjOBJ_GEOM, int(c.geom2)) or "")
+                ],
             )
         after = record["after"]
         unmet = []
@@ -127,3 +178,24 @@ class EpisodeDiagnostic:
         (self.root / "success_diagnostics.json").write_text(
             json.dumps(summary, default=json_value, indent=2) + "\n"
         )
+        if not self.writers:
+            return
+        ffmpeg = shutil.which("ffmpeg")
+        if ffmpeg is None:
+            warnings.warn(
+                "FFmpeg is unavailable; diagnostic videos retain mp4v encoding. "
+                "Install FFmpeg with libx264 for VS Code-compatible previews.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            return
+        for key in self.writers:
+            path = self.root / f"{key.rsplit('.', 1)[-1]}.mp4"
+            try:
+                _encode_preview_video(path, ffmpeg)
+            except (OSError, RuntimeError) as error:
+                warnings.warn(
+                    f"H.264 conversion failed for {path}; original video retained: {error}",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )

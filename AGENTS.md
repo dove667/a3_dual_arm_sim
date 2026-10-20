@@ -42,3 +42,7 @@ History favors imperative subjects such as `Simplify SmolVLA training and checkp
 ## Runtime & Artifact Management
 
 Keep datasets, downloaded weights, and generated results in `datasets/`, `models/<name>/`, `outputs/`, and `artifacts/`; leave them untracked. Preserve resource provenance in `assets/a3/PROVENANCE.md`. Prefer the `AI` conda environment on Dove's Mac; use the L40 server for this project's training and model inference.
+
+## Local and Server Synchronization
+
+Make each change in one checkout, commit and push it to `origin`, then update the other checkout with `git pull --ff-only`. Use Git to transfer source changes between the Mac and L40. Before pulling, inspect local changes and preserve unfinished work. Keep environments, datasets, weights, and generated outputs local to each machine.

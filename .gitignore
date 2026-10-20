@@ -1,21 +1,40 @@
+# Python bytecode and tool caches
 __pycache__/
 *.py[cod]
 .pytest_cache/
 .ruff_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+
+# Local environments and runtime state
 .venv/
+venv/
 .runtime/
-outputs/
-datasets/
-MUJOCO_LOG.TXT
-artifacts/batch_snapshots/
-artifacts/batch_snapshots_*/
-artifacts/batch_dev_*.json
+.env
+.env.*
+!.env.example
+!.env.template
+
+# Build and test outputs
 *.egg-info/
-.DS_Store
-build/
-dist/
-models/smolvla_base/
-# Downloaded model directories; keep simulator XML files in models/ tracked.
-/models/*/
-# Generated evaluation frames, previews and diagnostic reports.
+/build/
+/dist/
+.coverage
+.coverage.*
+/htmlcov/
+
+# Datasets, experiment outputs, and downloaded model directories
+/outputs/
+/datasets/
 /artifacts/
+/models/*/
+MUJOCO_LOG.TXT
+
+# Editor and operating-system files
+.vscode/
+.idea/
+.DS_Store
+._*
+*.swp
+*.swo
+*~

@@ -1,9 +1,62 @@
 import json
+import shutil
+import subprocess
 
 import cv2
 import numpy as np
+import pytest
 
 from a3_dual_arm_sim.workflows.diagnostics import EpisodeDiagnostic
+
+
+def test_diagnostic_video_uses_h264(tmp_path):
+    if shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None:
+        pytest.skip("FFmpeg and ffprobe are required for codec verification")
+    diagnostic = EpisodeDiagnostic(tmp_path / "trace")
+    for value in (0, 127, 255):
+        diagnostic.add_frame(
+            {"observation.images.front": np.full((32, 32, 3), value, dtype=np.uint8)},
+            np.zeros(16),
+            {"applied_action": np.zeros(16)},
+        )
+    diagnostic.close()
+    result = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=codec_name,pix_fmt,nb_frames",
+            "-of",
+            "json",
+            str(tmp_path / "trace/front.mp4"),
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    stream = json.loads(result.stdout)["streams"][0]
+    assert stream["codec_name"] == "h264"
+    assert stream["pix_fmt"] == "yuv420p"
+    assert stream["nb_frames"] == "3"
+
+
+def test_failed_conversion_preserves_original_video(tmp_path, monkeypatch):
+    from a3_dual_arm_sim.workflows.diagnostics import _encode_preview_video
+
+    path = tmp_path / "front.mp4"
+    path.write_bytes(b"original video")
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(args, 1, "", "encoder failed"),
+    )
+    with pytest.raises(RuntimeError, match="encoder failed"):
+        _encode_preview_video(path, "ffmpeg")
+    assert path.read_bytes() == b"original video"
+    assert list(tmp_path.iterdir()) == [path]
 
 
 def test_trace_keeps_before_observation_and_distinct_actions(tmp_path):

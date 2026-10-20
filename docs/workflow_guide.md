@@ -210,6 +210,8 @@ env -u MUJOCO_GL python examples/benchmark_cookie_batch.py \
 
 无桌面时保留 `MUJOCO_GL=egl` 并添加 `--diagnostic-dir outputs/<新的目录>`，会记录三路视频、动作和每步计数。可同时用 `--output` 保存报告。`raw_action`、`processed_action`、`applied_action` 分别用于区分模型输出、后处理和实际执行。
 
+诊断视频在每回合结束时自动转换为 H.264（`yuv420p`、faststart），保持原 `.mp4` 文件名，可直接在 VS Code 中预览。运行环境需要 PATH 中可用的 FFmpeg 及 `libx264` 编码器；未安装或转换失败时保留原始 `mp4v` 视频并提示原因。转换期间原视频保留，成功后替换。
+
 ### 4.3 如何读成绩
 
 主要成绩取 **回合结束时** `cookies_in_target`，不取中途最大值：
