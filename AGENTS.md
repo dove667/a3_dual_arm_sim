@@ -43,6 +43,10 @@ History favors imperative subjects such as `Simplify SmolVLA training and checkp
 
 Keep datasets, downloaded weights, and generated results in `datasets/`, `models/<name>/`, `outputs/`, and `artifacts/`; leave them untracked. Preserve resource provenance in `assets/a3/PROVENANCE.md`. Prefer the `AI` conda environment on Dove's Mac; use the L40 server for this project's training and model inference.
 
+## Project Memory
+
+`docs/project_memory.md` carries the project context inherited from earlier Codex sessions: verified Mac/L40 paths, remote and environment state, established working conventions, the course midterm scope, and what the user already understands. Read it before resuming tutorial-style or experiment work in this repository.
+
 ## Local and Server Synchronization
 
 Make each change in one checkout, commit and push it to `origin`, then update the other checkout with `git pull --ff-only`. Use Git to transfer source changes between the Mac and L40. Before pulling, inspect local changes and preserve unfinished work. Keep environments, datasets, weights, and generated outputs local to each machine.
