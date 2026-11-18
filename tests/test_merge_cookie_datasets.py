@@ -5,6 +5,8 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import pyarrow as pa
+import pyarrow.parquet as pq
 
 from a3_dual_arm_sim.contracts import (
     EEF_POSE,
@@ -156,12 +158,15 @@ def _audit_fixture(tmp_path: Path) -> Path:
         split.append(cookies[start : start + size])
         start += size
     rows = [
-        {"episode_index": 0, "success": True, "seed": 20001, "task": TASK_2X5},
+        {"episode_index": 0, "success": True, "seed": 20001, "task": TASK_2X5,
+         "frames": 12, "source_dataset": "local/mini-2x5"},
         {
             "episode_index": 1,
             "success": True,
             "seed": 21001,
             "task": plan.prompt(1),
+            "frames": 12,
+            "source_dataset": "local/mini-2x10",
             "randomization": {
                 "grasp_counts": list(plan.batch_sizes),
                 "first_grasp_count": plan.first_grasp,
@@ -200,6 +205,10 @@ def _audit_fixture(tmp_path: Path) -> Path:
                 "task": "cookie_transfer",
                 "stored_action_mode": "joint_position",
                 "target_layout": "multi",
+                "components": [
+                    {"repo_id": "local/mini-2x5", "target_layout": "2x5"},
+                    {"repo_id": "local/mini-2x10", "target_layout": "2x10"},
+                ],
                 "first_grasp_mode": "random",
                 "task_instruction": TASK_2X5,
                 "use_videos": False,
@@ -210,6 +219,12 @@ def _audit_fixture(tmp_path: Path) -> Path:
     (root / "a3_episode_metadata.jsonl").write_text(
         "".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8"
     )
+    episodes_path = root / "meta" / "episodes" / "chunk-000" / "file-000.parquet"
+    episodes_path.parent.mkdir(parents=True)
+    pq.write_table(pa.table({"episode_index": [0, 1], "length": [12, 12]}), episodes_path)
+    data_path = root / "data" / "chunk-000" / "file-000.parquet"
+    data_path.parent.mkdir(parents=True)
+    pq.write_table(pa.table({"episode_index": [0] * 12 + [1] * 12}), data_path)
     return root
 
 

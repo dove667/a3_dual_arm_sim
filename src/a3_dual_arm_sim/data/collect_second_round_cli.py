@@ -150,7 +150,12 @@ def worker(args):
     import pyarrow.parquet as pq
     import cv2
     root = args.root
-    settings = load_randomization_config(Path(__file__).resolve().parents[1]/'audits/medium_2x5_v1/randomization.yaml')
+    # Keep the collection profile in the protocol while using the tracked
+    # randomization configuration instead of a local audit run directory.
+    settings = load_randomization_config(
+        config={**load_randomization_config(project_root()/'configs/randomization.yaml'),
+                'profile': 'medium'}
+    )
     bench = CookieBatchBenchmark(project_root()/'configs/cookie_batch.yaml', max_steps=1600, complete_demonstrations=True, success_hold_steps=20, profile='medium', source_column=1, randomization_settings=settings)
     policy = ExpertPolicyAdapter(lambda env: TargetedExpert(env, args.category, args.seed), name='second_round_'+args.category)
     raw = root/'raw'

@@ -16,6 +16,22 @@ venv/
 !.env.template
 
 # Build and test outputs
+outputs/
+datasets/
+audits/
+reports/
+results/
+traces/
+checkpoints/
+wandb/
+*.safetensors
+*.pt
+*.pth
+*.ckpt
+MUJOCO_LOG.TXT
+artifacts/batch_snapshots/
+artifacts/batch_snapshots_*/
+artifacts/batch_dev_*.json
 *.egg-info/
 /build/
 /dist/
@@ -23,12 +39,9 @@ venv/
 .coverage.*
 /htmlcov/
 
-# Datasets, experiment outputs, and downloaded model directories
-/outputs/
-/datasets/
+# Downloaded model directories and remaining local artifacts
 /artifacts/
 /models/*/
-MUJOCO_LOG.TXT
 
 # Editor and operating-system files
 .vscode/

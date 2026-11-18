@@ -17,9 +17,11 @@ from a3_dual_arm_sim.paths import project_root
 from a3_dual_arm_sim.sim.randomization import load_randomization_config
 from a3_dual_arm_sim.tasks.cookie_2x10_plan import parse_first_grasp
 from a3_dual_arm_sim.tasks.cookie_2x10_settings import load_cookie_2x10_settings
+from a3_dual_arm_sim.tasks.cookie_scenarios import SCENARIO_TASKS
 from a3_dual_arm_sim.workflows.benchmark import (
     ACTPolicyAdapter,
     CookieBatchBenchmark,
+    PI05PolicyAdapter,
     SmolVLAPolicyAdapter,
     make_cookie_benchmark,
 )
@@ -31,6 +33,7 @@ DiagnosticBenchmark = CookieBatchBenchmark
 def run_metadata(args, benchmark):
     metadata = vars(args).copy()
     metadata["config"] = asdict(benchmark.config)
+    metadata["pi05_scene_protocol"] = getattr(benchmark, "pi05_scene_protocol", None)
     metadata["success_conditions"] = {
         "required_cookies_in_target": benchmark.required_cookies,
         "required_cookies_in_source": len(
@@ -42,8 +45,44 @@ def run_metadata(args, benchmark):
         "slot_tolerance_m": benchmark.config.cookie_transfer.target_slot_tolerance_m,
         "wall_contact_tolerance_m": benchmark.wall_contact_tolerance_m,
     }
+    if benchmark.task in SCENARIO_TASKS:
+        metadata["success_conditions"] = {
+            "required_new_cookies": benchmark.required_cookies,
+            "required_cookies_in_source": "initial_source_count - required_new_cookies",
+            "target_counts": ([benchmark.box_quota, benchmark.box_quota]
+                              if benchmark.task == "two-boxes" else [10]),
+            "prefilled_cookies_must_remain": benchmark.task == "prefilled",
+            "require_exact_slots": benchmark.task != "two-boxes" or benchmark.box_quota == 10,
+            "require_released_upright_and_settled": True,
+            "success_hold_steps": benchmark.success_hold_steps,
+            "slot_tolerance_m": benchmark.config.cookie_transfer.target_slot_tolerance_m,
+            "wall_contact_tolerance_m": benchmark.wall_contact_tolerance_m,
+        }
+        package_root = Path(__file__).resolve().parents[1]
+        protocol_files = (
+            package_root / "tasks/cookie_scenarios.py",
+            package_root / "tasks/cookie_transfer.py",
+            package_root / "config.py",
+            package_root / "sim/env.py",
+            package_root / "sim/object_builder.py",
+            package_root / "workflows/benchmark.py",
+            package_root / "workflows/benchmark_results.py",
+            package_root / "workflows/episode_execution.py",
+            package_root / "workflows/benchmark_cookie_batch_cli.py",
+        )
+        metadata["scenario_protocol"] = {
+            "version": 1,
+            "source_sha256": {
+                str(path.relative_to(package_root)): hashlib.sha256(path.read_bytes()).hexdigest()
+                for path in protocol_files
+            },
+        }
     metadata["task"] = benchmark.task
     metadata["first_grasp"] = getattr(benchmark, "first_grasp", None)
+    if benchmark.task == "tilted":
+        metadata["tilt_level"] = benchmark.tilt_level
+    if benchmark.task == "two-boxes":
+        metadata["box_quota"] = benchmark.box_quota
     metadata["randomization_settings"] = benchmark.randomization_settings
     metadata["source_column"] = benchmark.source_column
     metadata["randomization"] = {
@@ -66,7 +105,7 @@ def run_metadata(args, benchmark):
             metadata[key] = result.stdout.strip() if result.returncode == 0 else None
         except FileNotFoundError:
             metadata[key] = None
-    if args.policy.startswith(("smolvla:", "act:")):
+    if args.policy.startswith(("smolvla:", "act:", "pi05:")):
         from a3_dual_arm_sim.workflows.benchmark import resolve_smolvla_checkpoint
 
         checkpoint = resolve_smolvla_checkpoint(args.policy.split(":", 1)[1])
@@ -101,7 +140,7 @@ def main() -> int:
     parser.add_argument(
         "--policy",
         default="expert",
-        help="Policy: expert (task-specific), same_column, cross_column, variable_grasp (2x10), smolvla[:checkpoint_or_run], act:checkpoint_or_run, or module:factory",
+        help="Policy: expert, same_column, cross_column, variable_grasp, smolvla:, act:, pi05:, or module:factory",
     )
     parser.add_argument(
         "--episodes",
@@ -190,19 +229,31 @@ def main() -> int:
     )
     parser.add_argument("--dataset-root", type=Path, default=None)
     parser.add_argument("--diagnostic-dir", type=Path, default=None)
-    parser.add_argument("--task", choices=("2x5", "2x10"), default="2x5")
+    parser.add_argument("--pi05-scene", type=Path, help="Explicit provider scene fingerprint; changes evaluation protocol")
+    parser.add_argument("--pi05-scene-mode", choices=("cameras", "full"), default="cameras")
+    parser.add_argument("--task", choices=("2x5", "2x10", *SCENARIO_TASKS), default="2x5")
     parser.add_argument("--profile", choices=("basic", "medium", "advanced"))
     parser.add_argument("--source-column", choices=("1", "2", "3", "4", "random"))
     parser.add_argument("--randomization-config", type=Path)
     parser.add_argument("--first-grasp", type=parse_first_grasp)
+    parser.add_argument("--tilt-level", choices=("mild", "fallen"),
+                        help="Tilted task only: mild (default) or fallen cookies")
+    parser.add_argument("--box-quota", type=int, choices=(5, 10),
+                        help="Two-boxes task only: cookies per target box (default: 5)")
     parser.add_argument(
         "--prompt-style",
-        choices=("training", "task", "short"),
-        default="training",
-        help="training: original 2x5 prompt (2x10 stays native); task: native task prompt; short: transfer 10/20 cookies into target box",
+        choices=("training", "task", "short", "pi05_aligned"),
+        default=None,
+        help="Default: training for 2x5/2x10; task for the six scenario benchmarks",
     )
-    parser.add_argument("--num-steps", type=int, default=None, help="SmolVLA flow inference steps")
+    parser.add_argument("--num-steps", type=int, default=None, help="SmolVLA or pi05 flow inference steps")
     args = parser.parse_args()
+    if args.prompt_style is None:
+        args.prompt_style = "task" if args.task in SCENARIO_TASKS else "training"
+    if args.tilt_level is not None and args.task != "tilted":
+        parser.error("--tilt-level requires --task tilted")
+    if args.box_quota is not None and args.task != "two-boxes":
+        parser.error("--box-quota requires --task two-boxes")
     if min(args.episodes, args.max_steps, args.workers) < 1:
         parser.error("episodes, max-steps and workers must be positive")
     if args.task == "2x10" and (args.compare or args.policy in ("same_column", "cross_column")):
@@ -211,10 +262,17 @@ def main() -> int:
         )
     if args.task == "2x5" and (args.first_grasp is not None or args.policy == "variable_grasp"):
         parser.error("first-grasp and variable_grasp require --task 2x10")
+    if args.task in SCENARIO_TASKS:
+        if args.first_grasp is not None or args.policy == "variable_grasp":
+            parser.error("first-grasp and variable_grasp require --task 2x10")
+        if args.prompt_style != "task":
+            parser.error("the six scenario tasks require --prompt-style task")
+        if args.compare:
+            parser.error("run scenario expert policies separately; --compare supports 2x5")
     if args.num_steps is not None and (
-        args.num_steps < 1 or not args.policy.startswith("smolvla:")
+        args.num_steps < 1 or not args.policy.startswith(("smolvla:", "pi05:"))
     ):
-        parser.error("num-steps requires smolvla:<checkpoint> and a positive value")
+        parser.error("num-steps requires smolvla: or pi05: checkpoint and a positive value")
     overrides = any(
         v is not None
         for v in (
@@ -230,8 +288,8 @@ def main() -> int:
         parser.error(
             "Use separate expert runs for diagnostics; --compare does not accept overrides"
         )
-    if overrides and not args.policy.startswith(("smolvla:", "act:")):
-        parser.error("Policy overrides require smolvla:<checkpoint> or act:<checkpoint>")
+    if overrides and not args.policy.startswith(("smolvla:", "act:", "pi05:")):
+        parser.error("Policy overrides require smolvla:, act:, or pi05: checkpoint")
 
     if args.temporal_ensemble_coeff is not None and not args.policy.startswith("act:"):
         parser.error("Temporal ensembling requires act:<checkpoint>")
@@ -257,6 +315,8 @@ def main() -> int:
         task=args.task,
         prompt_style=args.prompt_style,
         first_grasp=first_grasp,
+        tilt_level=args.tilt_level,
+        box_quota=args.box_quota,
         **randomization,
         max_steps=args.max_steps,
         randomize_boxes=not args.no_randomize_boxes,
@@ -269,6 +329,11 @@ def main() -> int:
         wall_contact_tolerance_m=args.wall_contact_tolerance,
     )
 
+    if args.pi05_scene is not None:
+        if not args.policy.startswith("pi05:") or args.task != "2x5":
+            parser.error("--pi05-scene requires pi05: and --task 2x5")
+        from a3_dual_arm_sim.workflows.pi05_scene import configure
+        configure(benchmark, args.pi05_scene, args.pi05_scene_mode)
     workers = 1 if args.render else args.workers
     if args.diagnostic_dir is not None:
         benchmark.diagnostic_dir = (project_root() / args.diagnostic_dir).resolve()
@@ -279,27 +344,89 @@ def main() -> int:
         )
         workers = 1
     policy = args.policy
-    if overrides or args.policy.startswith(("smolvla:", "act:")):
-        adapter = ACTPolicyAdapter if args.policy.startswith("act:") else SmolVLAPolicyAdapter
+    if overrides or args.policy.startswith(("smolvla:", "act:", "pi05:")):
+        adapter = (
+            PI05PolicyAdapter if args.policy.startswith("pi05:")
+            else ACTPolicyAdapter if args.policy.startswith("act:")
+            else SmolVLAPolicyAdapter
+        )
         extra = {}
         if args.policy.startswith("smolvla:") and args.num_steps is not None:
             extra["num_steps"] = args.num_steps
         if args.policy.startswith("act:"):
             extra["temporal_ensemble_coeff"] = args.temporal_ensemble_coeff
-        policy = adapter(
-            args.policy.split(":", 1)[1],
-            dataset_root=(
-                project_root() / (args.dataset_root or Path("datasets/a3_front_close_left_100"))
-            ).resolve()
-            if args.dataset_root or args.policy.startswith("act:")
-            else None,
-            repo_id=args.repo_id
-            or ("Eter0109/a3-front-close-left-100" if args.policy.startswith("act:") else None),
-            device=args.device,
-            inference_seed=args.inference_seed,
-            n_action_steps=args.n_action_steps,
-            **extra,
-        )
+        checkpoint = args.policy.split(":", 1)[1]
+        if args.policy.startswith("pi05:"):
+            # 2x5 needs `pi05_aligned` because its benchmark can emit four different
+            # sentences and the checkpoint was fine-tuned on exactly one of them.
+            # 2x10 does not: its instruction comes from the plan
+            # (`Cookie2x10Plan.prompt`, sampled per seed), and `--prompt-style` only
+            # reaches `_episode_task` for "short" -- so there is no alignment flag to
+            # ask for.
+            needs_alignment = (
+                args.task == "2x5" and args.prompt_style != "pi05_aligned"
+            )
+            if needs_alignment or args.task not in ("2x5", "2x10", *SCENARIO_TASKS):
+                parser.error(
+                    "pi05: requires 2x5 with --prompt-style pi05_aligned, or --task 2x10, "
+                    "or a scenario task"
+                )
+            # Not a parser error: the checkpoint can be *loaded* on any scene, and
+            # `--pi05-scene-mode cameras` is a legitimate comparison. But this
+            # adapter's numbers are only comparable with the published ones when the
+            # training arrangement is rebuilt, and the failure is silent -- the policy
+            # parks and scores 0 instead of raising. Measured on this code: 5/10 with
+            # `full`, 0/10 without it and 0/10 with `cameras` only.
+            if args.task in SCENARIO_TASKS:
+                print(
+                    "[benchmark] pi05: this scenario tests scene and task generalization; "
+                    "its result is not a reproduction of the checkpoint's training scene.",
+                    flush=True,
+                )
+            elif args.task == "2x10":
+                # The 2x5 fingerprint cannot restore a 2x10 scene. The 2x10
+                # layout may differ from a checkpoint's training scene, so do
+                # not imply that scene compatibility has been established.
+                print(
+                    "[benchmark] pi05: WARNING -- 2x10 uses cookie_2x10.yaml; "
+                    "compatibility with this checkpoint's training scene is not verified. "
+                    "--pi05-scene is only supported for 2x5.",
+                    flush=True,
+                )
+                if args.prompt_style == "short":
+                    print(
+                        "[benchmark] pi05: WARNING -- --prompt-style short replaces the "
+                        "native 2x10 plan; verify it matches checkpoint training.",
+                        flush=True,
+                    )
+            elif args.pi05_scene is None or args.pi05_scene_mode != "full":
+                print(
+                    "[benchmark] pi05: WARNING -- a π₀.₅ checkpoint is scene-specific and\n"
+                    "            this run does NOT rebuild its training arrangement.\n"
+                    "            For numbers comparable with the published ones pass\n"
+                    "            --pi05-scene <fingerprint.json> --pi05-scene-mode full.\n"
+                    "            Measured: full 5/10, default scene 0/10, cameras-only 0/10.",
+                    flush=True,
+                )
+            policy = adapter(
+                checkpoint, device=args.device, inference_seed=args.inference_seed or 0,
+                n_action_steps=args.n_action_steps, num_inference_steps=args.num_steps,
+            )
+        else:
+            policy = adapter(
+                checkpoint,
+                dataset_root=(
+                    project_root() / (args.dataset_root or Path("datasets/a3_front_close_left_100"))
+                ).resolve()
+                if args.dataset_root or args.policy.startswith("act:")
+                else None,
+                repo_id=args.repo_id
+                or ("Eter0109/a3-front-close-left-100" if args.policy.startswith("act:") else None),
+                device=args.device,
+                inference_seed=args.inference_seed,
+                n_action_steps=args.n_action_steps,
+                **extra,
+            )
         workers = 1
 
     if args.compare:
@@ -367,6 +494,7 @@ def main() -> int:
     # Capture configuration before close() releases the loaded model.
     loaded_policy = getattr(getattr(policy, "plugin", None), "_policy", None)
     effective_config = asdict(loaded_policy.config) if loaded_policy is not None else None
+    inference_protocol = getattr(getattr(policy, "plugin", None), "inference_protocol", None)
     # Single policy benchmark
     try:
         result = benchmark.evaluate(
@@ -385,6 +513,8 @@ def main() -> int:
         report["run"] = run_metadata(args, benchmark)
         if effective_config is not None:
             report["run"]["effective_policy_config"] = effective_config
+        if inference_protocol is not None:
+            report["run"]["inference_protocol"] = inference_protocol
         args.output.write_text(
             json.dumps(report, indent=2, ensure_ascii=False, default=str) + "\n", encoding="utf-8"
         )
